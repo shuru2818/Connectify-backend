@@ -5,6 +5,9 @@ import { Server } from "socket.io";
 
 import cors from "cors";
 import { connectDB } from "./config/db.js";
+import Message from "./models/Message.js";
+import Chat from "./models/Chat.js";
+import Notification from "./models/Notification.js";
 
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
@@ -60,26 +63,69 @@ io.on("connection", (socket) => {
   });
 
   // send message
-  socket.on("send_message", (data) => {
-    if (!data?.receiverId) return;
+  socket.on("send_message", async (data) => {
+    try {
+      console.log("Received send_message:", data);
+      if (!data?.receiverId || !data?.senderId || !data?.message) return;
 
-    const message = {
-      senderId: data.senderId,
-      receiverId: data.receiverId,
-      message: data.message,
-      messageId: data.messageId,
-      status: "sent",
-      createdAt: new Date(),
-    };
+      // Find or create chat
+      let chat = await Chat.findOne({
+        participants: { $all: [data.senderId, data.receiverId] },
+        isGroup: false,
+      });
 
-    // send to receiver
-    io.to(data.receiverId.toString()).emit("receive_message", message);
+      if (!chat) {
+        chat = await Chat.create({
+          participants: [data.senderId, data.receiverId],
+          isGroup: false,
+        });
+      }
 
-    // DELIVERY STATUS (✔✔ delivered)
-    io.to(data.receiverId.toString()).emit("message_delivered", {
-      messageId: data.messageId,
-      status: "delivered",
-    });
+      // Create message
+      const dbMessage = await Message.create({
+        sender: data.senderId,
+        chat: chat._id,
+        content: data.message,
+        status: "sent",
+      });
+
+      // Update chat
+      chat.lastMessage = dbMessage._id;
+      chat.messages.push(dbMessage._id);
+      await chat.save();
+
+      // Create notifications for receiver
+      await Notification.create({
+        recipient: data.receiverId,
+        type: 'message',
+        sender: data.senderId,
+        chat: chat._id,
+        message: dbMessage._id,
+      });
+
+      // Emit to receiver
+      const message = {
+        senderId: data.senderId,
+        receiverId: data.receiverId,
+        message: data.message,
+        messageId: data.messageId,
+        status: "sent",
+        createdAt: new Date(),
+        _id: dbMessage._id, // include db id
+      };
+
+      io.to(data.receiverId.toString()).emit("receive_message", message);
+      console.log("Emitted receive_message to:", data.receiverId);
+
+      // DELIVERY STATUS (✔✔ delivered)
+      io.to(data.receiverId.toString()).emit("message_delivered", {
+        messageId: data.messageId,
+        status: "delivered",
+      });
+
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
   });
 
   // READ STATUS (✔✔ blue tick)
