@@ -20,6 +20,11 @@ const messageSchema = new mongoose.Schema(
     trim: true,
   },
 
+  edited: {
+    type: Boolean,
+    default: false,
+  },
+
   status: {
     type: String,
     enum: ["sent", "read", "delivered"],

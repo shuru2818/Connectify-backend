@@ -109,3 +109,56 @@ export const markMessagesAsRead = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// DELETE MESSAGE
+export const deleteMessage = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { messageId } = req.params;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    if (message.sender.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Not allowed to delete this message" });
+    }
+
+    await Message.findByIdAndDelete(messageId);
+
+    res.status(200).json({ message: "Message deleted" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// UPDATE MESSAGE
+export const updateMessage = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { messageId } = req.params;
+    const { content } = req.body;
+
+    if (!content) {
+      return res.status(400).json({ message: "Content required" });
+    }
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    if (message.sender.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Not allowed to edit this message" });
+    }
+
+    message.content = content;
+    message.edited = true;
+    await message.save();
+
+    res.status(200).json(message);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

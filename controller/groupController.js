@@ -41,6 +41,8 @@ export const getMyGroups = async (req, res) => {
   }
 };
 
+
+//search group
 export const searchGroups = async (req, res) => {
   try {
     const { query } = req.query;
@@ -81,7 +83,7 @@ export const addUserToGroup = async (req, res) => {
     }
 
     // avoid duplicate
-    if (group.participants.includes(userId)) {
+    if (group.participants.some(p => p.toString() === userId)) {
       return res.json({ message: "User already in group" });
     }
 
@@ -89,6 +91,34 @@ export const addUserToGroup = async (req, res) => {
     await group.save();
 
     res.json(group);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+//delete group
+
+export const deleteGroup = async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    const group = await Chat.findById(groupId);
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    // only admin can delete
+    if (group.admin.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Only admin can delete group" });
+    }
+
+    await Chat.findByIdAndDelete(groupId);
+
+    res.json({ message: "Group deleted successfully" });
+
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Server error" });

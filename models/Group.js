@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const chatSchema = new mongoose.Schema(
+const groupSchema = new mongoose.Schema(
   {
     groupName: {
       type: String,
@@ -34,4 +34,4 @@ const chatSchema = new mongoose.Schema(
   }
 );
 
-export default mongoose.model("Chat", chatSchema);
+export default mongoose.model("Group", groupSchema);
