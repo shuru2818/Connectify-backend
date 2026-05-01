@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['invitation','Invitation Accepted', 'message', 'Invitation Rejected', 'group_added'],
+    enum: ['invitation', 'accepted', 'rejected', 'message', 'group'],
     required: true
   },
   sender: {
@@ -21,7 +21,7 @@ const notificationSchema = new mongoose.Schema({
   },
   
   message: {
-    type: String
+    text: String
   },
   chat: {
     type: mongoose.Schema.Types.ObjectId,

@@ -10,7 +10,7 @@ const messageSchema = new mongoose.Schema(
 
   chat: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "PersonalChat",
+    ref: "Chat",
     required: true,
   },
 
@@ -36,7 +36,7 @@ const messageSchema = new mongoose.Schema(
       user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       readAt: { type: Date, default: Date.now },
     },
-  ],
+  ],  
 },
 { timestamps: true }
 );

@@ -6,8 +6,8 @@ import { getMyNotifications, deleteNotifications, markAllAsRead, markAsRead } fr
 const router = express.Router();
 
 router.get("/allnotifications", protect, getMyNotifications);
-router.get("/marksallread", protect, markAllAsRead);
-router.get("/:id/read", protect, markAsRead);
-router.get("/:id", protect, deleteNotifications);
+router.put("/marks-all-read", protect, markAllAsRead);
+router.put("/:id/read", protect, markAsRead);
+router.delete("/:id", protect, deleteNotifications);
 
 export default router;

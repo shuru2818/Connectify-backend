@@ -11,7 +11,7 @@ export const getMyNotifications =  async (req, res)=>{
       .populate("invitation")
       .populate("chat");
 
-      return res.status(200).json({notification});
+      return res.json(notification);
 
   }catch(err){
     return res.status(500).json({ message: err });
@@ -55,7 +55,7 @@ export const markAllAsRead =  async(req, res)=>{
 
     const notification = await Notification.updateMany(
       {recipient : currentUserId , isRead : false},
-      {isRead : true}
+      {$set: { isRead: true }}
     )
     return res.status(200).json({message: "All Notifications marked as read"});
 
@@ -81,7 +81,7 @@ export const deleteNotifications =  async(req, res)=>{
       return res.status(403).json({message:"Not Authorized"});
     }
     
-    await notification.deleteOne();
+    await Notification.findByIdAndDelete(id);
 
     return res.status(200).json({message : "Notifications deleted"})
   }catch(err){

@@ -46,3 +46,18 @@ export const getUserById = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+//alluser get
+export const getAllUsers = async (req, res) => {
+  try {
+    const currentUserId = req.user._id;
+
+    const users = await User.find({
+      _id: { $ne: currentUserId },
+    }).select("-password");
+
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

@@ -1,8 +1,8 @@
 import Message from "../models/Message.js";
 import Chat from "../models/Chat.js";
-import Notification from "../models/Notification.js";
+// import Notification from "../models/Notification.js";
 
-// SEND MESSAGE
+// sendMessage
 export const sendMessage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -17,48 +17,47 @@ export const sendMessage = async (req, res) => {
       return res.status(404).json({ message: "Chat not found" });
     }
 
-    // check user in chat
-    if (!chat.participants.includes(userId)) {
+    if (!chat.participants.some(p => p.toString() === userId.toString())) {
       return res.status(403).json({ message: "Not allowed" });
     }
 
-    // create message
     let message = await Message.create({
       sender: userId,
       chat: chatId,
       content,
-      status: "sent",
     });
 
-    // update chat
     chat.lastMessage = message._id;
-    chat.messages.push(message._id);
     await chat.save();
 
-    // create notifications for other users
-    const otherUsers = chat.participants.filter(
-      (p) => p.toString() !== userId.toString(),
-    );
+    // notifications  
+    // const otherUsers = chat.participants.filter(
+    //   p => p.toString() !== userId.toString()
+    // );
 
-    await Notification.insertMany(
-      otherUsers.map((user) => ({
-        user,
-        chat: chatId,
-        message: message._id,
-      })),
-    );
+    // if (otherUsers.length > 0) {
+    //   await Notification.insertMany(
+    //     otherUsers.map(user => ({
+    //       user,
+    //       chat: chatId,
+    //       message: message._id,
+    //     }))
+    //   );
+    // }
 
-    // populate for frontend
     message = await Message.findById(message._id)
-      .populate("sender", "name email")
-      .populate("chat");
+      .populate("sender", "name email");
 
     res.status(201).json(message);
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.log(error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
+
+// getMessages 
 export const getMessagesByChatId = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -69,7 +68,8 @@ export const getMessagesByChatId = async (req, res) => {
       return res.status(404).json({ message: "Chat not found" });
     }
 
-    if (!chat.participants.includes(userId)) {
+    
+    if (!chat.participants.some(p => p.toString() === userId.toString())) {
       return res.status(403).json({ message: "Not allowed" });
     }
 
@@ -77,16 +77,29 @@ export const getMessagesByChatId = async (req, res) => {
       .populate("sender", "name email")
       .sort({ createdAt: 1 });
 
-    res.status(200).json(messages);
+    res.json(messages);
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.log(error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
+
+// markMessages
 export const markMessagesAsRead = async (req, res) => {
   try {
     const userId = req.user._id;
     const { chatId } = req.body;
+
+    const chat = await Chat.findById(chatId);
+    if (!chat) {
+      return res.status(404).json({ message: "Chat not found" });
+    }
+
+    if (!chat.participants.some(p => p.toString() === userId.toString())) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
 
     await Message.updateMany(
       {
@@ -100,17 +113,19 @@ export const markMessagesAsRead = async (req, res) => {
             readAt: new Date(),
           },
         },
-        $set: { status: "read" },
-      },
+      }
     );
 
-    res.status(200).json({ message: "Messages marked as read" });
+    res.json({ message: "Messages marked as read" });
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.log(error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-// DELETE MESSAGE
+
+// deleteMessage
 export const deleteMessage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -122,18 +137,21 @@ export const deleteMessage = async (req, res) => {
     }
 
     if (message.sender.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Not allowed to delete this message" });
+      return res.status(403).json({ message: "Not allowed" });
     }
 
     await Message.findByIdAndDelete(messageId);
 
-    res.status(200).json({ message: "Message deleted" });
+    res.json({ message: "Message deleted" });
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.log(error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-// UPDATE MESSAGE
+
+// updateMessage
 export const updateMessage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -150,15 +168,17 @@ export const updateMessage = async (req, res) => {
     }
 
     if (message.sender.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Not allowed to edit this message" });
+      return res.status(403).json({ message: "Not allowed" });
     }
 
     message.content = content;
     message.edited = true;
     await message.save();
 
-    res.status(200).json(message);
+    res.json(message);
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.log(error);
+    res.status(500).json({ message: "Server error" });
   }
 };

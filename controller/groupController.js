@@ -1,25 +1,31 @@
 import Chat from "../models/Chat.js";
+import Message from "../models/Message.js";
+import User from "../models/User.js";
 
 // create group
 export const createGroup = async (req, res) => {
   try {
     const { groupName, participants } = req.body;
 
-    console.log("Create group request:", { groupName, participants, userId: req.user._id });
-
-    if (!groupName || !participants || participants.length === 0) {
+    if (!groupName || !participants) {
       return res.status(400).json({ message: "All fields required" });
     }
 
+    if (participants.length < 1) {
+      return res.status(400).json({ message: "At least 1 participant required" });
+    }
+
+    const allUsers = [...participants, req.user._id.toString()];
+    const uniqueUsers = [...new Set(allUsers)];
+
     const group = await Chat.create({
       groupName,
-      participants: [...participants, req.user._id], // include creator
+      participants: uniqueUsers,  
       admin: req.user._id,
       isGroupChat: true,
-    });
-
-    console.log("Group created:", group);
+    }); 
     res.status(201).json(group);
+    
   } catch (err) {
     console.log("Create group error:", err);
     res.status(500).json({ message: "Server error" });
@@ -32,6 +38,7 @@ export const getMyGroups = async (req, res) => {
   try {
     const groups = await Chat.find({
       participants: req.user._id,
+      isGroupChat: true
     }).populate("participants", "name email");
 
     res.json(groups);
@@ -51,14 +58,13 @@ export const searchGroups = async (req, res) => {
       return res.status(400).json({ message: "Search query is required" });
     }
 
-    const regex = new RegExp(query.trim(), "i");
-
     const groups = await Chat.find({
       participants: req.user._id,
-      groupName: { $regex: regex },
+      groupName: { $regex: query, $options: "i" },
+      isGroupChat: true
     }).populate("participants", "name email");
 
-    return res.status(200).json({ groups });
+    return res.json(groups);
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Server error" });
@@ -71,8 +77,12 @@ export const addUserToGroup = async (req, res) => {
   try {
     const { groupId, userId } = req.body;
 
-    const group = await Chat.findById(groupId);
+    const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+    }
 
+    const group = await Chat.findById(groupId);
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
     }
@@ -83,7 +93,7 @@ export const addUserToGroup = async (req, res) => {
     }
 
     // avoid duplicate
-    if (group.participants.some(p => p.toString() === userId)) {
+    if (group.participants.some(p => p.toString() === userId.toString())) {
       return res.json({ message: "User already in group" });
     }
 
@@ -115,6 +125,7 @@ export const deleteGroup = async (req, res) => {
       return res.status(403).json({ message: "Only admin can delete group" });
     }
 
+    await Message.deleteMany({ chat: groupId });
     await Chat.findByIdAndDelete(groupId);
 
     res.json({ message: "Group deleted successfully" });
