@@ -1,8 +1,6 @@
 import { Server } from "socket.io";
-import Message from "./models/Message.js";
 
 let onlineUsers = new Map();
-
 export { onlineUsers };
 
 export const initSocket = (server) => {
@@ -14,79 +12,49 @@ export const initSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
+    console.log("User connected:", socket.id);
+
+    // ✅ Add user + join personal room
     socket.on("addUser", (userId) => {
       if (!userId) return;
 
       onlineUsers.set(userId.toString(), socket.id);
+
+      // 🔥 IMPORTANT: join personal room
+      socket.join(userId.toString());
+
       io.emit("onlineUsers", Array.from(onlineUsers.keys()));
     });
 
+    // ✅ Join chat room
     socket.on("joinChat", (chatId) => {
       if (!chatId) return;
       socket.join(chatId.toString());
+      console.log("Joined chat:", chatId);
     });
 
-    socket.on("sendMessage", async (data) => {
-      if (!data?.chatId || !data?.content || !data?.sender) return;
-
-      const message = await Message.create({
-        chat: data.chatId,
-        content: data.content,
-        sender: data.sender,
-      });
-
-      const fullMessage = await message.populate("sender", "username");
-
-      const roomId = data.chatId.toString();
-
-      io.to(roomId).emit("receiveMessage", {
-        _id: fullMessage._id,
-        chat: roomId,
-        content: fullMessage.content,
-        sender: fullMessage.sender,
-        createdAt: fullMessage.createdAt,
-      });
-    });
-
+    // ✅ Typing (ROOM BASED FIX)
     socket.on("typing", (data) => {
-      const receiver = onlineUsers.get(data.receiverId?.toString());
-      if (receiver) {
-        io.to(receiver).emit("showTyping", {
-          senderId: data.senderId,
-        });
-      }
+      if (!data?.receiverId) return;
+
+      io.to(data.receiverId.toString()).emit("showTyping", {
+        senderId: data.senderId,
+      });
     });
 
+    // ✅ Stop typing
     socket.on("stopTyping", (data) => {
-      const receiver = onlineUsers.get(data.receiverId?.toString());
-      if (receiver) {
-        io.to(receiver).emit("hideTyping", {
-          senderId: data.senderId,
-        });
-      }
+      if (!data?.receiverId) return;
+
+      io.to(data.receiverId.toString()).emit("hideTyping", {
+        senderId: data.senderId,
+      });
     });
 
-    socket.on("markSeen", async (data) => {
-      if (!data?.chatId || !data?.senderId) return;
+    // ❌ REMOVE sendMessage
+    // ❌ REMOVE markSeen
 
-      await Message.updateMany(
-        {
-          chat: data.chatId,
-          sender: data.senderId,
-          status: { $ne: "read" },
-        },
-        { $set: { status: "read" } },
-      );
-
-      const senderSocket = onlineUsers.get(data.senderId.toString());
-
-      if (senderSocket) {
-        io.to(senderSocket).emit("messagesSeen", {
-          chatId: data.chatId,
-        });
-      }
-    });
-
+    // ✅ Disconnect
     socket.on("disconnect", () => {
       for (const [userId, socketId] of onlineUsers.entries()) {
         if (socketId === socket.id) {
@@ -95,6 +63,8 @@ export const initSocket = (server) => {
           break;
         }
       }
+
+      console.log("User disconnected:", socket.id);
     });
   });
 
