@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import Message from "./models/Message.js";
 
 let onlineUsers = new Map();
+
 export { onlineUsers };
 
 export const initSocket = (server) => {
@@ -13,117 +14,84 @@ export const initSocket = (server) => {
   });
 
   io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
-
-    // ========================
-    // ADD USER
-    // ========================
     socket.on("addUser", (userId) => {
       if (!userId) return;
 
-      onlineUsers.set(userId.toString(), {
-        socketId: socket.id,
+      onlineUsers.set(userId.toString(), socket.id);
+      io.emit("onlineUsers", Array.from(onlineUsers.keys()));
+    });
+
+    socket.on("joinChat", (chatId) => {
+      if (!chatId) return;
+      socket.join(chatId.toString());
+    });
+
+    socket.on("sendMessage", async (data) => {
+      if (!data?.chatId || !data?.content || !data?.sender) return;
+
+      const message = await Message.create({
+        chat: data.chatId,
+        content: data.content,
+        sender: data.sender,
       });
 
-      io.emit("onlineUsers", Array.from(onlineUsers.keys()));
+      const fullMessage = await message.populate("sender", "username");
 
-      io.emit("userStatus", {
-        userId,
-        status: "online",
+      const roomId = data.chatId.toString();
+
+      io.to(roomId).emit("receiveMessage", {
+        _id: fullMessage._id,
+        chat: roomId,
+        content: fullMessage.content,
+        sender: fullMessage.sender,
+        createdAt: fullMessage.createdAt,
       });
     });
 
-    // ========================
-    // SEND MESSAGE
-    // ========================
-  socket.on("sendMessage", (data) => {
-  if (!data?.chatId) return;
+    socket.on("typing", (data) => {
+      const receiver = onlineUsers.get(data.receiverId?.toString());
+      if (receiver) {
+        io.to(receiver).emit("showTyping", {
+          senderId: data.senderId,
+        });
+      }
+    });
 
-  io.to(data.chatId.toString()).emit("receiveMessage", data);
-});
+    socket.on("stopTyping", (data) => {
+      const receiver = onlineUsers.get(data.receiverId?.toString());
+      if (receiver) {
+        io.to(receiver).emit("hideTyping", {
+          senderId: data.senderId,
+        });
+      }
+    });
 
-//room
-socket.on("joinChat", (chatId) => {
-  if (!chatId) return;
-  socket.join(chatId.toString());
-  
-});
-
-    // ========================
-    // MARK SEEN
-    // ========================
     socket.on("markSeen", async (data) => {
       if (!data?.chatId || !data?.senderId) return;
 
-      const { chatId, senderId } = data;
+      await Message.updateMany(
+        {
+          chat: data.chatId,
+          sender: data.senderId,
+          status: { $ne: "read" },
+        },
+        { $set: { status: "read" } },
+      );
 
-      try {
-        await Message.updateMany(
-          {
-            chat: chatId,
-            sender: senderId,
-            status: { $ne: "read" },
-          },
-          { $set: { status: "read" } }
-        );
+      const senderSocket = onlineUsers.get(data.senderId.toString());
 
-        const senderSocket = onlineUsers.get(senderId.toString());
-
-        if (senderSocket) {
-          io.to(senderSocket.socketId).emit("messagesSeen", {
-            chatId,
-          });
-        }
-      } catch (err) {
-        console.error("MARK SEEN ERROR:", err);
-      }
-    });
-
-    // ========================
-    // TYPING
-    // ========================
-    socket.on("typing", (data) => {
-      if (!data?.receiverId || !data?.senderId) return;
-
-      const receiver = onlineUsers.get(data.receiverId.toString());
-
-      if (receiver) {
-        io.to(receiver.socketId).emit("showTyping", {
-          senderId: data.senderId,
+      if (senderSocket) {
+        io.to(senderSocket).emit("messagesSeen", {
+          chatId: data.chatId,
         });
       }
     });
 
-    // ========================
-    // STOP TYPING
-    // ========================
-    socket.on("stopTyping", (data) => {
-      if (!data?.receiverId || !data?.senderId) return;
-
-      const receiver = onlineUsers.get(data.receiverId.toString());
-
-      if (receiver) {
-        io.to(receiver.socketId).emit("hideTyping", {
-          senderId: data.senderId,
-        });
-      }
-    });
-
-    // ========================
-    // DISCONNECT
-    // ========================
     socket.on("disconnect", () => {
-      for (const [userId, data] of onlineUsers.entries()) {
-        if (data.socketId === socket.id) {
+      for (const [userId, socketId] of onlineUsers.entries()) {
+        if (socketId === socket.id) {
           onlineUsers.delete(userId);
-
           io.emit("onlineUsers", Array.from(onlineUsers.keys()));
-
-          io.emit("userStatus", {
-            userId,
-            status: "offline",
-          });
-
           break;
         }
       }

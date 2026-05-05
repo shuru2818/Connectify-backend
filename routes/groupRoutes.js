@@ -5,7 +5,8 @@ import {
   getMyGroups,
   addUserToGroup,
   searchGroups,
-  deleteGroup
+  deleteGroup,
+  removeUserFromGroup
 } from "../controller/groupController.js";
 
 const router = express.Router();
@@ -15,5 +16,6 @@ router.get("/my", protect, getMyGroups);
 router.get("/search", protect, searchGroups);
 router.post("/add-user", protect, addUserToGroup);
 router.delete("/delete/:groupId", protect, deleteGroup);
+router.post("/remove-user", protect, removeUserFromGroup);
 
 export default router;

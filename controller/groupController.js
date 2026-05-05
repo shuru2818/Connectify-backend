@@ -39,7 +39,7 @@ export const getMyGroups = async (req, res) => {
     const groups = await Chat.find({
       participants: req.user._id,
       isGroupChat: true
-    }).populate("participants", "name email");
+    }).populate("participants", "username email"); 
 
     res.json(groups);
   } catch (err) {
@@ -101,6 +101,41 @@ export const addUserToGroup = async (req, res) => {
     await group.save();
 
     res.json(group);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+//deleteuser from group
+
+// REMOVE USER FROM GROUP
+export const removeUserFromGroup = async (req, res) => {
+  try {
+    const { groupId, userId } = req.body;
+
+    const group = await Chat.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    // only admin
+    if (group.admin.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Only admin can remove users" });
+    }
+
+    group.participants = group.participants.filter(
+      (p) => p.toString() !== userId.toString()
+    );
+
+    await group.save();
+
+    const updated = await Chat.findById(groupId)
+      .populate("participants", "username email");
+
+    res.json(updated);
+
   } catch (err) {
     console.log(err);
     res.status(500).json({ message: "Server error" });
