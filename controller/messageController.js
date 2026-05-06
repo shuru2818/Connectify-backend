@@ -3,58 +3,71 @@ import Chat from "../models/Chat.js";
 import Notification from "../models/Notification.js";
 
 // SEND MESSAGE
-export const sendMessage = async (req, res) => {
+ export const sendMessage = async (req, res) => {
   try {
+    
     const userId = req.user._id;
     const { chatId, content } = req.body;
+    const file = req.file;
 
-    if (!chatId || !content) {
-      return res.status(400).json({ message: "chatId and content required" });
+    if (!chatId) {
+      return res.status(400).json({ message: "chatId required" });
     }
 
     const chat = await Chat.findById(chatId);
-    if (!chat) return res.status(404).json({ message: "Chat not found" });
 
-    if (!chat.participants.some(p => p.toString() === userId.toString())) {
+    if (!chat) {
+      return res.status(404).json({ message: "Chat not found" });
+    }
+
+    if (!chat.participants?.includes(userId.toString())) {
       return res.status(403).json({ message: "Not allowed" });
     }
 
-    let message = await Message.create({
-      sender: userId,
-      chat: chatId,
-      content,
-    });
-
-    chat.lastMessage = message._id;
-    await chat.save();
-
-    message = await Message.findById(message._id)
-      .populate("sender", "username email");
-
-    const io = req.app.get("io");
-
-    io.to(chatId.toString()).emit("receiveMessage", message);
-
-    const receivers = chat.participants.filter(
-      p => p.toString() !== userId.toString()
-    );
-
-    for (const receiverId of receivers) {
-      const notification = await Notification.create({
-        recipient: receiverId,
-        sender: userId,
-        type: "message",
-        message: { text: content },
-        chat: chatId,
-      });
-
-      io.to(receiverId.toString()).emit("newNotification", notification);
+    if (!content && !file) {
+      return res.status(400).json({ message: "Message or file required" });
     }
 
-    res.status(201).json(message);
+    let type = "text";
+    let fileUrl = null;
+
+    if (file) {
+      if (file.mimetype?.startsWith("image/")) {
+        type = "image";
+      } else {
+        type = "file";
+      }
+
+      fileUrl = file?.path;
+
+      if (!fileUrl) {
+        throw new Error("File upload failed (no file.path)");
+      }
+    }
+
+    const message = await Message.create({
+      sender: userId,
+      chat: chatId,
+      content: content || "",
+      type,
+      fileUrl,
+    });
+
+    await Chat.findByIdAndUpdate(chatId, {
+      lastMessage: message._id,
+    });
+
+    const io = req.app.get("io");
+    io.to(chatId.toString()).emit("receiveMessage", message);
+
+    return res.status(201).json(message);
+
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ message: "Server error" });
+    console.log("🔥 ERROR:", err);
+    return res.status(500).json({
+      message: "Server error",
+      error: err.message,
+    });
   }
 };
 

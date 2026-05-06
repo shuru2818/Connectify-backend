@@ -16,8 +16,17 @@ const messageSchema = new mongoose.Schema(
 
   content: {
     type: String,
-    required: true,
     trim: true,
+    default: ""
+  },
+  type: {
+    type: String,
+    enum: ["text", "image", "file"],
+    default: "text",
+  },
+  fileUrl:{
+    type: String,
+    default: null
   },
 
   edited: {
