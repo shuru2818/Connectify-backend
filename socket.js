@@ -12,6 +12,14 @@ export const initSocket = (server) => {
     },
   });
 
+//   const handleDelete = async (messageId) => {
+//   try {
+//     await api.delete(`/message/${messageId}`);
+//   } catch (err) {
+//     console.error(err);
+//   }
+// };
+
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
@@ -50,6 +58,21 @@ export const initSocket = (server) => {
       io.to(data.receiverId.toString()).emit("hideTyping", {
         senderId: data.senderId,
       });
+    });
+
+    //deletemsg
+
+    socket.on("deleteMessage", async ({ messageId, chatId }) => {
+      try {
+         
+        await Message.findByIdAndDelete(messageId);
+
+         
+        io.to(chatId).emit("messageDeleted", { messageId });
+
+      } catch (err) {
+        console.error("Delete error:", err);
+      }
     });
 
 
