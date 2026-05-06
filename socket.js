@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import User from "./models/User.js"
+import User from "./models/User.js";
 
 let onlineUsers = new Map();
 export { onlineUsers };
@@ -12,37 +12,27 @@ export const initSocket = (server) => {
     },
   });
 
-//   const handleDelete = async (messageId) => {
-//   try {
-//     await api.delete(`/message/${messageId}`);
-//   } catch (err) {
-//     console.error(err);
-//   }
-// };
-
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
-    // ✅ Add user + join personal room
+    // ✅ Add user
     socket.on("addUser", (userId) => {
       if (!userId) return;
 
       onlineUsers.set(userId.toString(), socket.id);
-
-      // 🔥 IMPORTANT: join personal room
       socket.join(userId.toString());
 
       io.emit("onlineUsers", Array.from(onlineUsers.keys()));
     });
 
-    // ✅ Join chat room
+    // ✅ Join chat
     socket.on("joinChat", (chatId) => {
       if (!chatId) return;
       socket.join(chatId.toString());
       console.log("Joined chat:", chatId);
     });
 
-    // ✅ Typing (ROOM BASED FIX)
+    // ✅ Typing
     socket.on("typing", (data) => {
       if (!data?.receiverId) return;
 
@@ -60,24 +50,10 @@ export const initSocket = (server) => {
       });
     });
 
-    //deletemsg
-
-    socket.on("deleteMessage", async ({ messageId, chatId }) => {
-      try {
-         
-        await Message.findByIdAndDelete(messageId);
-
-         
-        io.to(chatId).emit("messageDeleted", { messageId });
-
-      } catch (err) {
-        console.error("Delete error:", err);
-      }
-    });
-
+    // ❌ DELETE LOGIC REMOVED (VERY IMPORTANT)
 
     // ✅ Disconnect
-    socket.on("disconnect", async() => {
+    socket.on("disconnect", async () => {
       for (const [userId, socketId] of onlineUsers.entries()) {
         if (socketId === socket.id) {
           onlineUsers.delete(userId);
