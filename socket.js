@@ -1,4 +1,5 @@
 import { Server } from "socket.io";
+import User from "./models/User.js"
 
 let onlineUsers = new Map();
 export { onlineUsers };
@@ -51,14 +52,17 @@ export const initSocket = (server) => {
       });
     });
 
-    // ❌ REMOVE sendMessage
-    // ❌ REMOVE markSeen
 
     // ✅ Disconnect
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async() => {
       for (const [userId, socketId] of onlineUsers.entries()) {
         if (socketId === socket.id) {
           onlineUsers.delete(userId);
+
+          await User.findByIdAndUpdate(userId, {
+            lastSeen: new Date(),
+          });
+
           io.emit("onlineUsers", Array.from(onlineUsers.keys()));
           break;
         }
