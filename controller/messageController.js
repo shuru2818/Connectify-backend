@@ -1,11 +1,11 @@
 import Message from "../models/Message.js";
 import Chat from "../models/Chat.js";
+import Notification from "../models/Notification.js";
 
-// =======================
-// ✅ SEND MESSAGE
-// =======================
-export const sendMessage = async (req, res) => {
+// SEND MESSAGE
+ export const sendMessage = async (req, res) => {
   try {
+    
     const userId = req.user._id;
     const { chatId, content } = req.body;
     const file = req.file;
@@ -15,11 +15,12 @@ export const sendMessage = async (req, res) => {
     }
 
     const chat = await Chat.findById(chatId);
+
     if (!chat) {
       return res.status(404).json({ message: "Chat not found" });
     }
 
-    if (!chat.participants.some(p => p.toString() === userId.toString())) {
+    if (!chat.participants?.includes(userId.toString())) {
       return res.status(403).json({ message: "Not allowed" });
     }
 
@@ -31,15 +32,20 @@ export const sendMessage = async (req, res) => {
     let fileUrl = null;
 
     if (file) {
-      type = file.mimetype?.startsWith("image/") ? "image" : "file";
-      fileUrl = file.path;
+      if (file.mimetype?.startsWith("image/")) {
+        type = "image";
+      } else {
+        type = "file";
+      }
+
+      fileUrl = file?.path;
 
       if (!fileUrl) {
-        throw new Error("File upload failed");
+        throw new Error("File upload failed (no file.path)");
       }
     }
 
-    let message = await Message.create({
+     let message = await Message.create({
       sender: userId,
       chat: chatId,
       content: content || "",
@@ -47,23 +53,20 @@ export const sendMessage = async (req, res) => {
       fileUrl,
     });
 
-    // 🔥 IMPORTANT: populate sender (frontend ke liye)
     message = await message.populate("sender", "username email");
 
     await Chat.findByIdAndUpdate(chatId, {
       lastMessage: message._id,
     });
 
-    // 🔥 SAFE EMIT
     const io = req.app.get("io");
-    if (io) {
-      io.to(chatId.toString()).emit("receiveMessage", message);
-    }
+    io.to(chatId.toString()).emit("receiveMessage", message);
 
     return res.status(201).json(message);
 
   } catch (err) {
-    console.log("🔥 SEND ERROR:", err);
+    console.log("🔥 ERROR:", err);
+    
     return res.status(500).json({
       message: "Server error",
       error: err.message,
@@ -71,9 +74,7 @@ export const sendMessage = async (req, res) => {
   }
 };
 
-// =======================
-// ✅ GET MESSAGES
-// =======================
+// GET MESSAGES
 export const getMessagesByChatId = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -93,16 +94,13 @@ export const getMessagesByChatId = async (req, res) => {
       .sort({ createdAt: 1 });
 
     res.json(messages);
-
   } catch (error) {
-    console.log("🔥 GET ERROR:", error);
+    console.log(error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// =======================
-// ✅ MARK AS READ
-// =======================
+// MARK AS READ (FIXED + REALTIME)
 export const markMessagesAsRead = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -133,33 +131,24 @@ export const markMessagesAsRead = async (req, res) => {
     );
 
     const io = req.app.get("io");
-    if (io) {
-      io.to(chatId.toString()).emit("messagesSeen", {
-        chatId,
-        userId,
-      });
-    }
+
+    io.to(chatId.toString()).emit("messagesSeen", {
+      chatId,
+      userId,
+    });
 
     res.json({ message: "Messages marked as read" });
-
   } catch (error) {
-    console.log("🔥 READ ERROR:", error);
+    console.log(error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// =======================
-// ✅ DELETE MESSAGE
-// =======================
+// DELETE MESSAGE (REALTIME FIX)
 export const deleteMessage = async (req, res) => {
   try {
     const userId = req.user._id;
     const { messageId } = req.params;
-
-    // 🔥 guard for invalid id (temp ids etc.)
-    if (!messageId || messageId.startsWith("temp-")) {
-      return res.status(400).json({ message: "Invalid messageId" });
-    }
 
     const message = await Message.findById(messageId);
     if (!message) {
@@ -173,33 +162,24 @@ export const deleteMessage = async (req, res) => {
     await Message.findByIdAndDelete(messageId);
 
     const io = req.app.get("io");
-    if (io) {
-      io.to(message.chat.toString()).emit("messageDeleted", {
-        messageId,
-      });
-    }
+
+    io.to(message.chat.toString()).emit("messageDeleted", {
+      messageId,
+    });
 
     res.json({ message: "Message deleted" });
-
   } catch (error) {
-    console.log("🔥 DELETE ERROR:", error);
+    console.log(error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// =======================
-// ✅ UPDATE MESSAGE
-// =======================
+// UPDATE MESSAGE
 export const updateMessage = async (req, res) => {
   try {
     const userId = req.user._id;
     const { messageId } = req.params;
     const { content } = req.body;
-
-    // 🔥 guard for temp ids
-    if (!messageId || messageId.startsWith("temp-")) {
-      return res.status(400).json({ message: "Invalid messageId" });
-    }
 
     if (!content) {
       return res.status(400).json({ message: "Content required" });
@@ -216,18 +196,15 @@ export const updateMessage = async (req, res) => {
 
     message.content = content;
     message.edited = true;
-
     await message.save();
 
     const io = req.app.get("io");
-    if (io) {
-      io.to(message.chat.toString()).emit("messageUpdated", message);
-    }
+
+    io.to(message.chat.toString()).emit("messageUpdated", message);
 
     res.json(message);
-
   } catch (error) {
-    console.log("🔥 UPDATE ERROR:", error);
+    console.log(error);
     res.status(500).json({ message: "Server error" });
   }
-};
+};      
