@@ -32,8 +32,12 @@ const userSchema = new mongoose.Schema({
   lastSeen: {
     type: Date,
     default: Date.now
-  }
-}, {
+  },
+  profilePic: {
+  type: String,
+  default: ""
+  },
+},{
   timestamps: true
 });
 
