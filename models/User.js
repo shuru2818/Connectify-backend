@@ -34,12 +34,12 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
   profilePic: {
-  type: String,
-  default: ""
+    type: String,
+    default: ""
   },
   about: {
-      type: String,
-      default: "",
+    type: String,
+    default: "",
     },
 },{
   timestamps: true
