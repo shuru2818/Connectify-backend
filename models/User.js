@@ -16,15 +16,24 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required:true,
-    unique:true,
+    // required:true,
+    // unique:true,
+    // sparse: true,
     trim: true
   },
   password: {
     type: String,
-    required: true,
+    required: function () {
+      return !this.authType;
+    },
     minlength: 6
   },
+  authType: {
+    type: String,
+    enum: ["local", "google"],
+    default: "local",
+  },
+
   isOnline: {
     type: Boolean,
     default: false

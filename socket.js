@@ -50,7 +50,7 @@ export const initSocket = (server) => {
       });
     });
 
-    // ❌ DELETE LOGIC REMOVED (VERY IMPORTANT)
+    // DELETE LOGIC REMOVED (VERY IMPORTANT)
 
     // ✅ Disconnect
     socket.on("disconnect", async () => {

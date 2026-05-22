@@ -1,11 +1,61 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { OAuth2Client } from "google-auth-library";
 
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
+};
+
+//google login
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+export const googleLogin = async (req, res) => {
+  try {
+    const { credential } = req.body;
+
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    const { email, name, picture } = payload;
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        username: name,
+        email,
+        profilePic: picture,
+        authType: "google",
+      });
+    }
+
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "7d",
+      }
+    );
+
+    res.status(200).json({
+      token,
+      user,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "Google Login Failed",
+      error: error.message,
+    });
+  }
 };
 
 
@@ -20,9 +70,17 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "Name, email and password are required" });
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    const existingUser = await User.findOne({ 
+      $or: [{email: email.toLowerCase().trim()} , {phone:phone.trim()}] });
+      
     if (existingUser) {
-      return res.status(409).json({ message: "User already exists with this email" });
+      if(existingUser.email === email.toLowerCase().trim()){
+        return res.status(409).json({ message: "User already exists with this email" });
+      }
+
+      if(existingUser.phone === phone.trim()){
+        return res.status(409).json({ message: "User already exists with this phone Number" });
+      }
     }
 
     const salt = await bcrypt.genSalt(10);

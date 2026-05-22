@@ -11,21 +11,12 @@ import User from "../models/User.js";
 
 const router = express.Router();
 
-
-// GET ALL USERS
 router.get("/", protect, getAllUsers);
 
-
-// SEARCH USERS
 router.get("/search", protect, searchUsers);
 
-
-// GET SINGLE USER
 router.get("/:id", protect, getUserById);
 
-
-
-// UPDATE USER PROFILE
 router.put("/update/:id", protect, async (req, res) => {
   try {
 
