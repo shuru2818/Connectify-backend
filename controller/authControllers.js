@@ -2,6 +2,53 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
+import {sendOTPEmail} from "../services/EmailServices.js";
+import { generateOTP } from "../services/OTPGenerator.js";
+
+//verfication of OTP
+export const verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    if (user.otp !== otp) {
+      return res.status(400).json({
+        message: "Invalid OTP",
+      });
+    }
+
+    if (user.otpExpiry < Date.now()) {
+      return res.status(400).json({
+        message: "OTP expired",
+      });
+    }
+
+    user.isVerified = true;
+    user.otp = null;
+    user.otpExpiry = null;
+
+    await user.save();
+
+    return res.status(200).json({
+      message: "Email verified successfully",
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+};
 
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
@@ -34,6 +81,7 @@ export const googleLogin = async (req, res) => {
         email,
         profilePic: picture,
         authType: "google",
+        isVerified: true,
       });
     }
 
@@ -85,13 +133,19 @@ export const signup = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-
+    let otp = generateOTP();
     const newUser = await User.create({
       username: username.trim(),
       email: email.toLowerCase().trim(),
       phone: phone?.trim() || "",
       password: hashedPassword,
+      otp,
+      otpExpiry: Date.now() + 5 * 60 * 1000,
+      isVerified: false,
     });
+
+    
+      await sendOTPEmail(newUser.email, otp);
 
     const token = generateToken(newUser._id);
 
@@ -131,6 +185,11 @@ export const login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid email or password" });
+    }
+    if (!user.isVerified) {
+      return res.status(401).json({
+        message: "Please verify your email first",
+      });
     }
 
     user.isOnline = true;
@@ -183,5 +242,6 @@ export const getMe = async (req, res) => {
   } catch (error) {
     console.error("GetMe Error:", error);
     return res.status(500).json({ message: "Internal server error" });
+    
   }
-};
+};  
