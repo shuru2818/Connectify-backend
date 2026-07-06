@@ -5,6 +5,14 @@ import { OAuth2Client } from "google-auth-library";
 import { sendOTPEmail } from "../services/EmailServices.js";
 import { generateOTP } from "../services/OTPGenerator.js";
 
+const generateToken = (userId) => {
+  return jwt.sign(
+    { id: userId },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+  );
+};
+
 //verfication of OTP
 export const verifyOTP = async (req, res) => {
   try {
