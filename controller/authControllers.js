@@ -143,9 +143,9 @@ export const signup = async (req, res) => {
       otpExpiry: Date.now() + 5 * 60 * 1000,
       isVerified: false,
     });
-
     
-      await sendOTPEmail(newUser.email, otp);
+    
+    await sendOTPEmail(newUser.email, otp);
 
     const token = generateToken(newUser._id);
 

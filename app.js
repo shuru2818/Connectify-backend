@@ -26,7 +26,7 @@ app.set("io", io);
 
 // MIDDLEWARE
 app.use(cors({
-    origin: "https://connectify-frontend-rose.vercel.app",
+    origin: ["https://connectify-frontend-rose.vercel.app","http://localhost:5173"],
     credentials: true,
   })
 );
