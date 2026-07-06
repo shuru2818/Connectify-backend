@@ -15,45 +15,51 @@ export const verifyOTP = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // OTP attempts check
+    if (!user.otpAttempts) user.otpAttempts = 0;
+
+    if (user.otpAttempts >= 5) {
+      return res.status(429).json({
+        message: "Too many attempts. Try again later.",
       });
     }
 
     if (user.otp !== otp) {
-      return res.status(400).json({
-        message: "Invalid OTP",
-      });
+      user.otpAttempts += 1;
+      await user.save();
+
+      return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    if (user.otpExpiry < Date.now()) {
-      return res.status(400).json({
-        message: "OTP expired",
-      });
+    if (!user.otpExpiry || user.otpExpiry < Date.now()) {
+      return res.status(400).json({ message: "OTP expired" });
     }
 
     user.isVerified = true;
     user.otp = null;
     user.otpExpiry = null;
+    user.otpAttempts = 0;
 
     await user.save();
 
+    const token = generateToken(user._id);
+
     return res.status(200).json({
       message: "Email verified successfully",
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        username: user.username,
+      },
     });
   } catch (error) {
     console.error(error);
-
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
-};
-
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  });
 };
 
 //google login
@@ -212,28 +218,52 @@ export const login = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required" });
+      return res.status(400).json({
+        message: "Email and password are required",
+      });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    });
+
     if (!user) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    // brute force protection
+    if (!user.loginAttempts) user.loginAttempts = 0;
+
+    if (user.loginAttempts >= 5) {
+      return res.status(429).json({
+        message: "Too many failed attempts. Try later.",
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
+
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      user.loginAttempts += 1;
+      await user.save();
+
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
     }
+
     if (!user.isVerified) {
       return res.status(401).json({
         message: "Please verify your email first",
       });
     }
 
+    // reset attempts after success
+    user.loginAttempts = 0;
     user.isOnline = true;
     user.lastSeen = new Date();
+
     await user.save();
 
     const token = generateToken(user._id);
@@ -252,7 +282,9 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error("Login Error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };
 
