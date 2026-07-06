@@ -2,7 +2,7 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import {sendOTPEmail} from "../services/EmailServices.js";
+import { sendOTPEmail } from "../services/EmailServices.js";
 import { generateOTP } from "../services/OTPGenerator.js";
 
 //verfication of OTP
@@ -85,13 +85,9 @@ export const googleLogin = async (req, res) => {
       });
     }
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      }
-    );
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     res.status(200).json({
       token,
@@ -106,75 +102,119 @@ export const googleLogin = async (req, res) => {
   }
 };
 
-
 //signup function
 
 export const signup = async (req, res) => {
-  
   try {
     const { username, email, phone, password } = req.body;
 
+    // -------------------------
+    // 1. VALIDATION
+    // -------------------------
     if (!username || !email || !password) {
-      return res.status(400).json({ message: "Name, email and password are required" });
+      return res.status(400).json({
+        message: "Username, email and password are required",
+      });
     }
 
-    const existingUser = await User.findOne({ 
-      $or: [{email: email.toLowerCase().trim()} , {phone:phone.trim()}] });
-      
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanPhone = phone ? phone.trim() : null;
+
+    // -------------------------
+    // 2. CHECK EXISTING USER (SAFE)
+    // -------------------------
+    const query = [{ email: cleanEmail }];
+
+    if (cleanPhone) {
+      query.push({ phone: cleanPhone });
+    }
+
+    const existingUser = await User.findOne({
+      $or: query,
+    });
+
     if (existingUser) {
-      if(existingUser.email === email.toLowerCase().trim()){
-        return res.status(409).json({ message: "User already exists with this email" });
+      if (existingUser.email === cleanEmail) {
+        return res.status(409).json({
+          message: "User already exists with this email",
+        });
       }
 
-      if(existingUser.phone === phone.trim()){
-        return res.status(409).json({ message: "User already exists with this phone Number" });
+      if (cleanPhone && existingUser.phone === cleanPhone) {
+        return res.status(409).json({
+          message: "User already exists with this phone number",
+        });
       }
     }
 
+    // -------------------------
+    // 3. HASH PASSWORD
+    // -------------------------
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    let otp = generateOTP();
+
+    // -------------------------
+    // 4. GENERATE OTP
+    // -------------------------
+    const otp = generateOTP();
+
+    // -------------------------
+    // 5. CREATE USER (PENDING VERIFICATION)
+    // -------------------------
     const newUser = await User.create({
       username: username.trim(),
-      email: email.toLowerCase().trim(),
-      phone: phone?.trim() || "",
+      email: cleanEmail,
+      phone: cleanPhone,
       password: hashedPassword,
       otp,
       otpExpiry: Date.now() + 5 * 60 * 1000,
       isVerified: false,
     });
-    
-    
-    await sendOTPEmail(newUser.email, otp);
 
-    const token = generateToken(newUser._id);
+    // -------------------------
+    // 6. SEND OTP EMAIL (IMPORTANT CHECK)
+    // -------------------------
+    try {
+      await sendOTPEmail(newUser.email, otp);
+    } catch (emailError) {
+      // rollback user if email fails
+      await User.findByIdAndDelete(newUser._id);
 
+      return res.status(500).json({
+        message: "Failed to send OTP email. Please try again.",
+      });
+    }
+
+    // -------------------------
+    // 7. RESPONSE (NO TOKEN HERE ❌)
+    // -------------------------
     return res.status(201).json({
-      message: "Account created successfully",
+      message: "OTP sent successfully. Please verify your email.",
       user: {
-         _id: newUser._id,
-          username: newUser.username,
-          email: newUser.email,
-          phone: newUser.phone,
-          profilePic: newUser.profilePic,
-          about: newUser.about,
+        _id: newUser._id,
+        username: newUser.username,
+        email: newUser.email,
+        phone: newUser.phone,
       },
-      token,
     });
   } catch (error) {
     console.error("Signup Error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };
 
-//login function 
+//login function
 
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
+      return res
+        .status(400)
+        .json({ message: "Email and password are required" });
     }
 
     const user = await User.findOne({ email: email.toLowerCase().trim() });
@@ -242,6 +282,5 @@ export const getMe = async (req, res) => {
   } catch (error) {
     console.error("GetMe Error:", error);
     return res.status(500).json({ message: "Internal server error" });
-    
   }
-};  
+};
